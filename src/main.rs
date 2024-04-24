@@ -17,7 +17,7 @@ fn model(app: &App) -> Model {
         .unwrap();
 
     Model {
-        grid: Grid::new(1, 1000, app.window_rect())
+        grid: Grid::new(10, 100, app.window_rect()),
     }
 }
 
@@ -60,37 +60,58 @@ macro_rules! random_in_window {
 #[derive(Default)]
 struct Grid {
     fields: Vec<Vec2>,
-    cells: Vec<Cell>
+    cells: Vec<Cell>,
+    original: Vec<Cell>
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 struct Cell {
     pos: Vec2,
     direction: Vec2,
+
+    lifetime: u32,
+    id: usize,
 }
 
 impl Cell {
-    fn new(window: Rect) -> Self {
+    fn new(window: Rect, id: usize) -> Self {
         let r = random_in_window!(window);
         Self {
             pos: r,
-            direction: r
+            direction: r,
+
+            lifetime: random_range(10, 90),
+            id
         }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self) -> Option<()> {
+        self.lifetime -= 1;
+        if self.lifetime == 0 {
+            return None;
+        }
+
         self.pos += self.direction.normalize();
+        Some(())
+    }
+
+    fn revive(&mut self, replacement: Self) {
+        *self = replacement;
     }
 }
 
 impl Grid {
+    const ATTRACTION_STRENGTH: f32 = 10.;
+
     fn new(fields: usize, cells: usize, window: Rect) -> Self {
         let mut grid = Self::default();
-        for i in 0..fields {
+        for _ in 0..fields {
             grid.fields.push(random_in_window!(window))
         }
-        for i in 0..cells {
-            grid.cells.push(Cell::new(window))
+        for id in 0..cells {
+            let cell = Cell::new(window, id);
+            grid.cells.push(cell);
+            grid.original.push(cell);
         }
 
         grid
@@ -98,11 +119,26 @@ impl Grid {
 
     fn update(&mut self) {
         for cell in self.cells.iter_mut() {
-            cell.update()
+            if let None = cell.update() {
+                cell.revive(self.original[cell.id])
+            }
         }
+
+        self.attract()
     }
 
     fn attract(&mut self) {
-
+        for cell in self.cells.iter_mut() {
+            for &field in self.fields.iter() {
+                let direction = (field - cell.pos).normalize();
+                let distance = distance(cell.pos, field);
+                let attraction = distance/Self::ATTRACTION_STRENGTH;
+                cell.pos += direction * attraction;
+            }
+        }
     }
+}
+
+fn distance(a: Vec2, b: Vec2) -> f32 {
+    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
 }
