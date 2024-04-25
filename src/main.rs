@@ -17,7 +17,7 @@ fn model(app: &App) -> Model {
         .unwrap();
 
     Model {
-        grid: Grid::new(10, 100, app.window_rect()),
+        grid: Grid::new(5, 200, app.window_rect()),
     }
 }
 
@@ -26,7 +26,6 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
-    let win = app.window_rect();
     let t = app.time;
     let draw = app.draw();
 
@@ -34,15 +33,22 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     for &field in model.grid.fields.iter() {
         draw.ellipse()
-            .radius(2.)
+            .radius(2.*(PI*t).sin())
             .color(BURLYWOOD)
             .xy(field);
     }
     for cell in model.grid.cells.iter() {
         draw.ellipse()
-            .radius(5.)
+            .radius(1.)
             .color(GREY)
             .xy(cell.pos);
+
+        // debug
+        draw.line()
+            .weight(1.)
+            .color(GREEN)
+            .start(cell.pos)
+            .end(cell.pos + cell.direction.normalize()*50.);
     }
 
 
@@ -52,7 +58,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
 macro_rules! random_in_window {
     ($rect: expr) => {
-        Vec2::new(random_range(-$rect.w(), $rect.w()), random_range(-$rect.h(), $rect.h()))
+        Vec2::new(random_range(-$rect.w()/2., $rect.w()/2.), random_range(-$rect.h()/2., $rect.h()/2.))
     };
 }
 
@@ -80,7 +86,7 @@ impl Cell {
             pos: r,
             direction: r,
 
-            lifetime: random_range(10, 90),
+            lifetime: random_range(100, 900),
             id
         }
     }
@@ -101,7 +107,7 @@ impl Cell {
 }
 
 impl Grid {
-    const ATTRACTION_STRENGTH: f32 = 10.;
+    const ATTRACTION: f32 = 1000.;
 
     fn new(fields: usize, cells: usize, window: Rect) -> Self {
         let mut grid = Self::default();
@@ -131,14 +137,19 @@ impl Grid {
         for cell in self.cells.iter_mut() {
             for &field in self.fields.iter() {
                 let direction = (field - cell.pos).normalize();
-                let distance = distance(cell.pos, field);
-                let attraction = distance/Self::ATTRACTION_STRENGTH;
-                cell.pos += direction * attraction;
+
+                // cheap hacky way instead of dot product solve for theta and use that to get resultant direction
+                // since these vectors are noramlized they form a circle of radius 1 so we can comput the midpoint between two point of the circumference and normalize that for a good approx
+                cell.direction = midpoint(cell.direction, direction);
+
+                // let distance = cell.pos.distance(field);
+                // let attraction = distance/Self::ATTRACTION;
+                // cell.pos += cell.direction * attraction;
             }
         }
     }
 }
 
-fn distance(a: Vec2, b: Vec2) -> f32 {
-    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
+fn midpoint(a: Vec2, b: Vec2) -> Vec2 {
+    Vec2::new((a.x+b.x)/2., (a.y+b.y)/2.)
 }
